@@ -13,47 +13,45 @@ with st.sidebar:
     risico = st.select_slider("Risk Profili", options=["Düşük", "Orta", "Yüksek"])
     
     st.divider()
+    # AANGEPAST: Bitcoin is nu BTC-USD geworden
     tickers_dict = {
         "ABD Doları (USD/TRY)": "USDTRY=X",
         "Euro (EUR/TRY)": "EURTRY=X",
         "Gümüş (Silver)": "SI=F",
         "Alüminyum": "ALI=F",
-        "Bitcoin": "BTC-TRY",
+        "Bitcoin": "BTC-USD", 
         "Altın (Ons)": "GC=F"
     }
     gekozen_ticker = st.selectbox("Geçmiş Grafiği İncele:", list(tickers_dict.keys()))
 
-# --- STAP 2: Live Data Ophalen (NU MET FOUTAFHANDELING) ---
+# --- STAP 2: Live Data Ophalen ---
 @st.cache_data(ttl=3600)
 def haal_data_op(tickers):
     prijzen = {}
     historie = {}
     
-    # 1. Probeer USD/TRY op te halen, met controle
     usd_data = yf.Ticker("USDTRY=X").history(period="1d")
     if not usd_data.empty:
         usd_try_koers = usd_data['Close'].iloc[-1]
     else:
-        usd_try_koers = 32.0 # Nood-waarde als Yahoo Finance storing heeft
+        usd_try_koers = 32.0 
         st.sidebar.warning("Kon live USD/TRY koers niet ophalen.")
     
-    # 2. Haal de rest van de tickers op
     for naam, symbool in tickers.items():
         t = yf.Ticker(symbool)
         hist = t.history(period="1y")['Close']
         
-        # CONTROLE: Is de lijst leeg?
         if not hist.empty:
-            if symbool in ["SI=F", "ALI=F", "GC=F"]:
+            # AANGEPAST: BTC-USD toegevoegd aan het lijstje dat wordt omgerekend naar Lira
+            if symbool in ["SI=F", "ALI=F", "GC=F", "BTC-USD"]:
                 prijzen[naam] = hist.iloc[-1] * usd_try_koers
                 historie[naam] = hist * usd_try_koers
             else:
                 prijzen[naam] = hist.iloc[-1]
                 historie[naam] = hist
         else:
-            # Als er geen data is, vul een dummy-waarde in om een crash te voorkomen
             st.sidebar.error(f"Geen data gevonden voor {naam} ({symbool})")
-            prijzen[naam] = 0.0001 # Voorkomt dat we later 'delen door nul'
+            prijzen[naam] = 0.0001 
             historie[naam] = pd.Series([0.0001])
             
     return prijzen, historie
@@ -73,7 +71,6 @@ def bereken_tr_advies(budget, risico, prijzen):
     for item, perc in verdeling.items():
         bedrag_try = budget * perc
         prijs_try = prijzen[item]
-        # Bereken eenheden veilig
         eenheden = bedrag_try / prijs_try if prijs_try > 0.0001 else 0
         rows.append([item, f"%{perc*100}", f"₺{bedrag_try:,.2f}", f"₺{prijs_try:,.2f}", round(eenheden, 4)])
     
@@ -91,4 +88,4 @@ with col2:
     st.subheader(f"Trend Analizi: {gekozen_ticker}")
     st.line_chart(jaar_historie[gekozen_ticker])
 
-st.info("Not: Metal fiyatları (Gümüş/Alüminyum) ve Altın, USD bazlı piyasalardan çekilip güncel kurla TRY'ye çevrilmiştir.")
+st.info("Not: Metal fiyatları ve Bitcoin, USD bazlı piyasalardan çekilip güncel kurla TRY'ye çevrilmiştir.")
