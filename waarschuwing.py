@@ -35,7 +35,7 @@ def check_kansen():
 def stuur_email(gevonden_kansen):
     # VUL HIER JE EIGEN GEGEVENS IN:
     afzender_email = "jouw_email@gmail.com" 
-    app_wachtwoord = "jouw_app_wachtwoord_hier" # Zie instructies hieronder!
+    app_wachtwoord = "dqko tmsz lynp zvri" # Zie instructies hieronder!
     ontvanger_email = "jouw_email@gmail.com" # Mag hetzelfde zijn, je stuurt het naar jezelf
     
     # We maken een mooie tekst van de lijst met meldingen
