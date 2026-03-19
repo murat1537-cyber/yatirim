@@ -1,41 +1,60 @@
 import streamlit as st
 import pandas as pd
+import yfinance as yf
 
-# Titel van de app
-st.title("🚀 Mijn AI Investeringshulp")
-st.subheader("Ontvang een suggestie voor je portfolio op basis van jouw profiel.")
+# Titel en Styling
+st.set_page_config(page_title="AI Investment Tracker", layout="wide")
+st.title("📈 Live AI Investeringsdashboard")
+st.markdown("Dit dashboard haalt **live beurskoersen** op om je budget te verdelen.")
 
-# Stap 1: Gebruikersinput
-budget = st.number_input("Wat is je totale investeringsbudget (€)?", min_value=100, value=1000)
-risico = st.select_slider(
-    "Wat is je risicobereidheid?",
-    options=["Laag", "Gemiddeld", "Hoog"]
-)
+# --- STAP 1: Gebruikersinput ---
+with st.sidebar:
+    st.header("Instellingen")
+    budget = st.number_input("Investeringsbudget (€)", min_value=50, value=1000)
+    risico = st.select_slider("Risicoprofiel", options=["Laag", "Gemiddeld", "Hoog"])
 
-# Stap 2: De "AI" Logica (Eenvoudig algoritme)
-def bereken_verdeling(budget, risico):
+# --- STAP 2: Live Data Ophalen ---
+@st.cache_data(ttl=3600) # Slaat data 1 uur op om de app snel te houden
+def haal_koersen_op():
+    tickers = {
+        "Aandelen (S&P 500)": "^GSPC",
+        "Goud": "GC=F",
+        "Bitcoin": "BTC-USD"
+    }
+    prijzen = {}
+    for naam, ticker in tickers.items():
+        data = yf.Ticker(ticker)
+        # Haal de laatst bekende prijs op
+        prijzen[naam] = data.history(period="1d")['Close'].iloc[-1]
+    return prijzen
+
+live_prijzen = haal_koersen_op()
+
+# --- STAP 3: Verdelingslogica ---
+def bereken_advies(budget, risico, prijzen):
     if risico == "Laag":
-        verdeling = {"Obligaties": 0.7, "Aandelen": 0.2, "Cash/Goud": 0.1}
+        verdeling = {"Goud": 0.6, "Aandelen (S&P 500)": 0.3, "Bitcoin": 0.1}
     elif risico == "Gemiddeld":
-        verdeling = {"Obligaties": 0.4, "Aandelen": 0.5, "Crypto": 0.1}
-    else: # Hoog risico
-        verdeling = {"Obligaties": 0.1, "Aandelen": 0.6, "Crypto": 0.3}
+        verdeling = {"Goud": 0.3, "Aandelen (S&P 500)": 0.5, "Bitcoin": 0.2}
+    else: # Hoog
+        verdeling = {"Goud": 0.1, "Aandelen (S&P 500)": 0.4, "Bitcoin": 0.5}
     
-    # Omzetten naar bedragen
-    resultaat = {item: percentage * budget for item, percentage in verdeling.items()}
-    return resultaat
+    data_rows = []
+    for item, percentage in verdeling.items():
+        bedrag = budget * percentage
+        prijs = prijzen[item]
+        eenheden = bedrag / prijs
+        data_rows.append([item, f"{percentage*100}%", f"€{bedrag:,.2f}", f"€{prijs:,.2f}", round(eenheden, 4)])
+    
+    return pd.DataFrame(data_rows, columns=["Activa", "Verdeling", "Bedrag", "Huidige Prijs", "Aantal te kopen"])
 
-# Stap 3: Resultaten tonen
-if st.button("Genereer Advies"):
-    advies = bereken_verdeling(budget, risico)
+# --- STAP 4: Resultaten tonen ---
+if st.button("Update Portfolio met Live Koersen"):
+    df_advies = bereken_advies(budget, risico, live_prijzen)
     
-    st.write(f"### Aanbevolen verdeling voor een {risico} risicoprofiel:")
+    st.subheader(f"Geadviseerde Portefeuille ({risico} Risico)")
+    st.table(df_advies)
     
-    # Tabel tonen
-    df = pd.DataFrame(list(advies.items()), columns=["Categorie", "Bedrag (€)"])
-    st.table(df)
-    
-    # Grafiek tonen
-    st.bar_chart(df.set_index("Categorie"))
-    
-    st.success("Dit is een technisch voorbeeld. Doe altijd eigen onderzoek voor je investeert!")
+    # Visuele weergave
+    st.bar_chart(df_advies.set_index("Activa")["Aantal te kopen"])
+    st.info("De prijzen zijn live opgehaald via de Yahoo Finance API.")
