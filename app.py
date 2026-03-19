@@ -2,59 +2,61 @@ import streamlit as st
 import pandas as pd
 import yfinance as yf
 
-# Titel en Styling
-st.set_page_config(page_title="AI Investment Tracker", layout="wide")
-st.title("📈 Live AI Investeringsdashboard")
-st.markdown("Dit dashboard haalt **live beurskoersen** op om je budget te verdelen.")
+# Configuratie
+st.set_page_config(page_title="AI Investerings Dashboard", layout="wide")
+st.title("📊 Investeringshulp met Historische Analyse")
 
 # --- STAP 1: Gebruikersinput ---
 with st.sidebar:
     st.header("Instellingen")
-    budget = st.number_input("Investeringsbudget (€)", min_value=50, value=1000)
+    budget = st.number_input("Budget (€)", min_value=50, value=1000)
     risico = st.select_slider("Risicoprofiel", options=["Laag", "Gemiddeld", "Hoog"])
-
-# --- STAP 2: Live Data Ophalen ---
-@st.cache_data(ttl=3600) # Slaat data 1 uur op om de app snel te houden
-def haal_koersen_op():
-    tickers = {
+    
+    st.divider()
+    # Keuze voor de grafiek
+    tickers_dict = {
         "Aandelen (S&P 500)": "^GSPC",
         "Goud": "GC=F",
         "Bitcoin": "BTC-USD"
     }
+    gekozen_ticker = st.selectbox("Bekijk historische trend van:", list(tickers_dict.keys()))
+
+# --- STAP 2: Functies voor Data ---
+@st.cache_data(ttl=3600)
+def haal_koersen_en_historie(tickers):
     prijzen = {}
-    for naam, ticker in tickers.items():
-        data = yf.Ticker(ticker)
-        # Haal de laatst bekende prijs op
-        prijzen[naam] = data.history(period="1d")['Close'].iloc[-1]
-    return prijzen
+    historie_data = {}
+    for naam, symbool in tickers.items():
+        ticker_obj = yf.Ticker(symbool)
+        # Haal data van het laatste jaar op
+        hist = ticker_obj.history(period="1y")
+        prijzen[naam] = hist['Close'].iloc[-1]
+        historie_data[naam] = hist['Close']
+    return prijzen, historie_data
 
-live_prijzen = haal_koersen_op()
+live_prijzen, jaar_historie = haal_koersen_en_historie(tickers_dict)
 
-# --- STAP 3: Verdelingslogica ---
-def bereken_advies(budget, risico, prijzen):
-    if risico == "Laag":
-        verdeling = {"Goud": 0.6, "Aandelen (S&P 500)": 0.3, "Bitcoin": 0.1}
-    elif risico == "Gemiddeld":
-        verdeling = {"Goud": 0.3, "Aandelen (S&P 500)": 0.5, "Bitcoin": 0.2}
-    else: # Hoog
-        verdeling = {"Goud": 0.1, "Aandelen (S&P 500)": 0.4, "Bitcoin": 0.5}
-    
-    data_rows = []
-    for item, percentage in verdeling.items():
-        bedrag = budget * percentage
-        prijs = prijzen[item]
-        eenheden = bedrag / prijs
-        data_rows.append([item, f"{percentage*100}%", f"€{bedrag:,.2f}", f"€{prijs:,.2f}", round(eenheden, 4)])
-    
-    return pd.DataFrame(data_rows, columns=["Activa", "Verdeling", "Bedrag", "Huidige Prijs", "Aantal te kopen"])
+# --- STAP 3: Hoofdoverzicht ---
+col1, col2 = st.columns([1, 1])
 
-# --- STAP 4: Resultaten tonen ---
-if st.button("Update Portfolio met Live Koersen"):
-    df_advies = bereken_advies(budget, risico, live_prijzen)
+with col1:
+    st.subheader("Portefeuille Advies")
+    # Verdelingslogica (zelfde als voorheen)
+    verdeling = {"Laag": {"Goud": 0.6, "Aandelen (S&P 500)": 0.3, "Bitcoin": 0.1},
+                 "Gemiddeld": {"Goud": 0.3, "Aandelen (S&P 500)": 0.5, "Bitcoin": 0.2},
+                 "Hoog": {"Goud": 0.1, "Aandelen (S&P 500)": 0.4, "Bitcoin": 0.5}}[risico]
     
-    st.subheader(f"Geadviseerde Portefeuille ({risico} Risico)")
+    advies_lijst = []
+    for item, perc in verdeling.items():
+        bedrag = budget * perc
+        advies_lijst.append([item, f"{perc*100}%", f"€{bedrag:.2f}", round(bedrag/live_prijzen[item], 4)])
+    
+    df_advies = pd.DataFrame(advies_lijst, columns=["Activa", "%", "Bedrag", "Aantal"])
     st.table(df_advies)
-    
-    # Visuele weergave
-    st.bar_chart(df_advies.set_index("Activa")["Aantal te kopen"])
-    st.info("De prijzen zijn live opgehaald via de Yahoo Finance API.")
+
+with col2:
+    st.subheader(f"Trend: {gekozen_ticker}")
+    # Toon de grafiek van de gekozen ticker
+    st.line_chart(jaar_historie[gekozen_ticker])
+
+st.success("De data wordt automatisch ververst met de nieuwste beurskoersen.")
